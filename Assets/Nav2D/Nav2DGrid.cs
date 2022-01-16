@@ -7,62 +7,66 @@ using Nav2D;
 
 public class Nav2DGrid : MonoBehaviour
 {
-    public Node[,] grid;
-
-    public Vector3 position;
-    public float sizex;
-    public float sizey;
-
-    public float nodesizex;
-    public float nodesizey;
-    public int dimensionx;
-    public int dimensiony;
-
+    Node[,] grid = null;
     List<Vector2> path = null;
 
+    public Vector2 nodesize = new Vector2(0.5f, 0.5f);
+    public Vector2Int dimension;
     public LayerMask notWalkableMask;
+
+    [Header("SETTINGS")]
+    public bool debug = true;
 
     private void CreateGrid()
     {
-        dimensionx = Mathf.FloorToInt(sizex/nodesizex);
-        dimensiony = Mathf.FloorToInt(sizey/nodesizey);
-        grid = new Node[dimensionx, dimensiony];
+        dimension = Vector2Int.FloorToInt(transform.localScale / nodesize);
+        dimension.x -= (dimension.x % 2 == 0) ? 0 : 1;
+        dimension.y -= (dimension.y % 2 == 0) ? 0 : 1;
+        grid = new Node[dimension.x, dimension.y];
 
-        for (int x = 0; x < dimensionx; x++)
+        for (int x = 0; x < dimension.x; x++)
         {
-            for (int y = 0; y < dimensiony; y++)
+            for (int y = 0; y < dimension.y; y++)
             {
                 Vector3 worldPos = GridToWorldPosition(new Vector3(x, y));
-                Node gridnode = new Node(worldPos, new Vector3(x, y));
+                Node node = new Node(new Vector2(x, y));
 
-                Collider2D hit = Physics2D.OverlapBox(worldPos, new Vector2(nodesizex,nodesizey), 0, notWalkableMask);
+                Collider2D hit = Physics2D.OverlapBox(worldPos, nodesize, 0, notWalkableMask);
 
                 if (hit != null)
                 {
-                    gridnode.walkable = false;
+                    node.walkable = false;
                 }
                 else
                 {
-                    gridnode.walkable = true;
+                    node.walkable = true;
                 }
 
-                grid[x, y] = gridnode;
+                grid[x, y] = node;
             }
         }
     }
 
     public Vector3 GridToWorldPosition(Vector3 gridPosition)
     {
-        float px = position.x - sizex / 2 + (gridPosition.x) * nodesizex + nodesizex / 2;
-        float py = position.y - sizey / 2 + (gridPosition.y) * nodesizey + nodesizey / 2;
-        return new Vector3(px, py);
+        //Vector3 pos = 
+        //    transform.position - transform.localScale / 2 + 
+        //    new Vector3(gridPosition.x * nodesize.x, gridPosition.y * nodesize.y) + 
+        //    (Vector3) nodesize / 2;
+        Vector3 pos = gridPosition - (Vector3) (Vector2) dimension / 2;
+        pos.x = pos.x * nodesize.x + nodesize.x / 2;
+        pos.y = pos.y * nodesize.y + nodesize.y / 2;
+        pos += transform.position;
+        return pos;
     }
 
     public List<Vector2> GetPath(Vector2 start, Vector2 end)
     {
-        int cost = Node.Cost(start, end);
-        Node startnode = grid[(int) start.x, (int) start.y]; startnode.parent = null;
-        Node endnode = grid[(int)end.x, (int)end.y];
+        Node startnode = grid[(int) start.x, (int) start.y]; 
+        Node endnode = grid[(int)end.x, (int)end.y]; 
+        startnode.parent = null;
+        startnode.gcost = 0;
+        startnode.hcost = Node.Cost(startnode, endnode);
 
         List<Node> open = new List<Node>();
         List<Node> closed = new List<Node>();
@@ -71,8 +75,7 @@ public class Nav2DGrid : MonoBehaviour
         while (true)
         {
             Node cnode = open[0];
-            foreach (Node node in open)
-                if (node.IsCostLessThan(cnode)) cnode = node;
+            foreach (Node node in open) if (node.IsCostLessThan(cnode)) cnode = node;
             open.Remove(cnode);
             closed.Add(cnode);
 
@@ -97,12 +100,10 @@ public class Nav2DGrid : MonoBehaviour
                 }
 
                 // if in open, compare else add
-                int offeredg = cnode.gcost + Node.Cost(cnode.gridPosition, neighbor.gridPosition);
-                //int offeredg = cnode.gcost + ((cnode.gridPosition.x-neighbor.gridPosition.x==0 || cnode.gridPosition.y - neighbor.gridPosition.y == 0)?10:14);
-
+                int offeredg = cnode.gcost + Node.Cost(cnode, neighbor);
                 if (open.Contains(neighbor))
                 {
-                    if (neighbor.gcost > offeredg)
+                    if (offeredg < neighbor.gcost)
                     {
                         neighbor.gcost = offeredg;
                         neighbor.parent = cnode;
@@ -111,7 +112,7 @@ public class Nav2DGrid : MonoBehaviour
                 else
                 {
                     neighbor.gcost = offeredg;
-                    neighbor.hcost = Node.Cost(neighbor.gridPosition, endnode.gridPosition);
+                    neighbor.hcost = Node.Cost(neighbor, endnode);
                     neighbor.parent = cnode;
                     open.Add(neighbor);
                 }
@@ -129,7 +130,6 @@ public class Nav2DGrid : MonoBehaviour
                 return path;
             }
         }
-        return null;
     }
 
     public List<Node> GetNodeNeighbors(Node n)
@@ -144,7 +144,7 @@ public class Nav2DGrid : MonoBehaviour
                 int x = i + (int)n.gridPosition.x;
                 int y = j + (int)n.gridPosition.y;
 
-                if (x < 0 || x >= dimensionx || y < 0 || y >= dimensiony) continue;
+                if (x < 0 || x >= dimension.x || y < 0 || y >= dimension.y) continue;
                 if (!grid[x, y].walkable) continue;
 
                 neighbors.Add(grid[x, y]);
@@ -161,50 +161,51 @@ public class Nav2DGrid : MonoBehaviour
     private void Update()
     {
         CreateGrid();
-        if (true)//Input.GetKeyDown(KeyCode.Return))
+        if (true)
         {
-            Vector2 end = new Vector2(dimensionx - 1, dimensiony - 1);
-            Debug.Log(end);
+            Vector2 end = new Vector2(dimension.x - 1, dimension.y - 1);
             path = GetPath(new Vector2(0, 0), end);
-            if (path != null)
-            {
-                foreach (Vector2 p in path)
-                {
-                    Debug.Log(p);
-                }
-            }
         }
 
     }
 
     private void OnDrawGizmos()
     {
-        Gizmos.DrawWireCube(position, new Vector2(sizex, sizey));
-        for (int x = 0; x < dimensionx; x++)
+        dimension = Vector2Int.FloorToInt(transform.localScale / nodesize);
+        dimension.x -= (dimension.x % 2 == 0) ? 0 : 1;
+        dimension.y -= (dimension.y % 2 == 0) ? 0 : 1;
+        Gizmos.DrawWireCube(transform.position, transform.localScale);
+        if (UnityEditor.Selection.activeGameObject == this.gameObject)
         {
-            for (int y = 0; y < dimensiony; y++)
+            for (int x = 0; x < dimension.x; x++)
             {
-                Vector3 worldPos = GridToWorldPosition(new Vector3(x, y));
-                if (grid[x, y].walkable)
+                for (int y = 0; y < dimension.y; y++)
                 {
-                    Gizmos.color = new Color(0, 0, 1, 0.1f);
+                    Vector3 worldPos = GridToWorldPosition(new Vector3(x, y));
+                    if (grid != null)
+                    {
+                        if (grid[x, y].walkable)
+                        {
+                            Gizmos.color = new Color(0, 0, 1, 0.1f);
+                        }
+                        else
+                        {
+                            Gizmos.color = new Color(1, 0, 0, 0.1f);
+                        }
+                        Gizmos.DrawCube(worldPos, nodesize);
+                    }
+                    Gizmos.color = new Color(1f, 1f, 1f, 0.1f);
+                    Gizmos.DrawWireCube(worldPos, nodesize);
                 }
-                else
-                {
-                    Gizmos.color = new Color(1, 0, 0, 0.1f);
-                }
-                Gizmos.DrawCube(worldPos, new Vector2(nodesizex, nodesizey));
-                Gizmos.color = Color.gray;
-                Gizmos.DrawWireCube(worldPos, new Vector2(nodesizex, nodesizey));
             }
         }
 
-        if (path != null)
+        if (path != null && debug)
         {
             foreach (Vector2 p in path)
             {
                 Gizmos.color = Color.yellow;
-                Gizmos.DrawCube(GridToWorldPosition(p), new Vector2(nodesizex, nodesizey));
+                Gizmos.DrawCube(GridToWorldPosition(p), nodesize);
             }
         }
     }

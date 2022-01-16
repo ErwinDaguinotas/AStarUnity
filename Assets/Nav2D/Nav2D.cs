@@ -7,7 +7,6 @@ namespace Nav2D
 {
     public class Node
     {
-        public Vector2 worldPosition;
         public Vector2 gridPosition;
         public Node parent;
         public bool walkable;
@@ -16,7 +15,6 @@ namespace Nav2D
         public int hcost;
 
         public Node(
-            Vector2 _worldPosition,
             Vector2 _gridPosition,
             bool _walkable = false,
             Node _parent = null,
@@ -24,7 +22,6 @@ namespace Nav2D
             int _gcost = 0,
             int _hcost = 0)
         {
-            worldPosition = _worldPosition;
             gridPosition = _gridPosition;
             parent = _parent;
             walkable = _walkable;
@@ -33,26 +30,15 @@ namespace Nav2D
             hcost = _hcost;
         }
 
-        public Node (Node a)
-        {
-            worldPosition = a.worldPosition;
-            gridPosition = a.gridPosition;
-            parent = a.parent;
-            walkable = a.walkable;
-            weight = a.weight;
-            gcost = a.gcost;
-            hcost = a.hcost;
-        }
-
         public int fcost
         {
             get { return gcost + hcost; }
         }
 
-        public static int Cost(Vector2 a, Vector2 b)
+        public static int Cost(Node a, Node b)
         {
-            int x = Mathf.Abs((int)b.x - (int)a.x);
-            int y = Mathf.Abs((int)b.y - (int)a.y);
+            int x = Mathf.Abs((int)b.gridPosition.x - (int)a.gridPosition.x);
+            int y = Mathf.Abs((int)b.gridPosition.y - (int)a.gridPosition.y);
             int c = Mathf.Max(x, y) * 10 + Mathf.Min(x, y) * (14 - 10);
             return c;
         }
@@ -62,6 +48,13 @@ namespace Nav2D
                 if (hcost == a.hcost) return gcost < a.gcost;
                 else return hcost < a.hcost;
             else return fcost < a.fcost;
+        }
+
+        public Node GetCopy()
+        {
+            // copy resets to parent to null
+            Node copy = new Node(gridPosition, walkable, null, weight, gcost, hcost);
+            return copy;
         }
     }
 }
