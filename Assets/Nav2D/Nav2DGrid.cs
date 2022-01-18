@@ -8,14 +8,10 @@ using Nav2D;
 public class Nav2DGrid : MonoBehaviour
 {
     Node[,] grid = null;
-    List<Vector2> path = null;
 
     public Vector2 nodesize = new Vector2(0.5f, 0.5f);
     public Vector2Int dimension;
     public LayerMask notWalkableMask;
-
-    [Header("SETTINGS")]
-    public bool debug = true;
 
     private void CreateGrid()
     {
@@ -57,6 +53,16 @@ public class Nav2DGrid : MonoBehaviour
         pos.x = pos.x * nodesize.x + nodesize.x / 2;
         pos.y = pos.y * nodesize.y + nodesize.y / 2;
         pos += transform.position;
+        return pos;
+    }
+
+    public Vector2 WorldToGridPosition(Vector3 worldPosition)
+    {
+        Vector2 pos = worldPosition - transform.position;
+        pos.x = (pos.x) / nodesize.x;
+        pos.y = (pos.y) / nodesize.y;
+        pos += (Vector2)dimension / 2;
+        pos = (Vector2) Vector2Int.FloorToInt(pos);
         return pos;
     }
 
@@ -132,6 +138,17 @@ public class Nav2DGrid : MonoBehaviour
         }
     }
 
+    public List<Vector3> RequestPath(Vector2 start, Vector2 end)
+    {
+        List<Vector2> path = GetPath(WorldToGridPosition(start), WorldToGridPosition(end));
+        List<Vector3> worldPath = new List<Vector3>();
+        for (int i=0; i<path.Count; i++)
+        {
+            worldPath.Add(GridToWorldPosition(path[i]));
+        }
+        return worldPath;
+    }
+
     public List<Node> GetNodeNeighbors(Node n)
     {
         List<Node> neighbors = new List<Node>();
@@ -161,12 +178,6 @@ public class Nav2DGrid : MonoBehaviour
     private void Update()
     {
         CreateGrid();
-        if (true)
-        {
-            Vector2 end = new Vector2(dimension.x - 1, dimension.y - 1);
-            path = GetPath(new Vector2(0, 0), end);
-        }
-
     }
 
     private void OnDrawGizmos()
@@ -197,15 +208,6 @@ public class Nav2DGrid : MonoBehaviour
                     Gizmos.color = new Color(1f, 1f, 1f, 0.1f);
                     Gizmos.DrawWireCube(worldPos, nodesize);
                 }
-            }
-        }
-
-        if (path != null && debug)
-        {
-            foreach (Vector2 p in path)
-            {
-                Gizmos.color = Color.yellow;
-                Gizmos.DrawCube(GridToWorldPosition(p), nodesize);
             }
         }
     }
