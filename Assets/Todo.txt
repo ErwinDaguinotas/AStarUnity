@@ -1,0 +1,43 @@
+agent:
+	path
+
+	pathRequest
+
+	if (pathRequest is complete) {
+		change path
+	}
+
+	if (should change path) {
+		create a new path request then pass it to the grid
+	}
+
+	() => {
+		some function to make the agent follow the path
+	}
+
+grid:
+	pathRequest[] requests
+	thread[] runningRequests
+
+	public static void RequestPath(pathRequest req) {
+		requests.add(req);
+	}
+
+	// could also run on a separate thread
+	public static void DoRequests() {
+		if (there is any requests) {
+			create a new thread for the request;
+			run the thread;
+		}
+	}
+
+	public static void GetPath(pathRequest req) {
+		// some function to calculate the path and notify the requestor when
+		// the path is ready
+	}
+
+pathRequest:
+	Agent // the owner of the request
+	isDone // flag to notify the owner when the request is done
+	vector worldStart
+	vector worldEnd

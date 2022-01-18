@@ -1,7 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+
 using UnityEngine.Tilemaps;
+using System.Threading;
+
 
 using Nav2D;
 
@@ -9,12 +12,66 @@ public class Nav2DGrid : MonoBehaviour
 {
     Node[,] grid = null;
 
+    [Header("FOR THREADING")]
+    public Vector3 position;
+    public Vector3 size;
+
+    [Header("SETTINGS")]
     public Vector2 nodesize = new Vector2(0.5f, 0.5f);
     public Vector2Int dimension;
     public LayerMask notWalkableMask;
 
+    [Header("PATH REQUEST SYSTEM")]
+    public Queue<PathRequest> requests;
+    public Queue<Thread> runningRequests;
+    public Nav2DGrid instance;
+
+    private void Start()
+    {
+        requests = new Queue<PathRequest>();
+        runningRequests = new Queue<Thread>();
+        instance = this;
+
+        CreateGrid();
+    }
+
+    
+    // ===PATH REQEUSTS MANAGER===
+    public void RequestPath(PathRequest req)
+    {
+        Debug.Log("RequestPath() -- request recieved");
+        requests.Enqueue(req);
+        Debug.Log("RequestPath() -- request queued");
+    }
+
+    public void DoRequests()
+    {
+        while (requests.Count > 0)
+        {
+            Debug.Log("DoRequests() -- request threaded");
+            PathRequest req = requests.Dequeue();
+            Thread t = new Thread(() =>
+            {
+                GetPath((Node[,])grid.Clone(), req);
+            });
+            t.Start();
+            Debug.Log("DoRequests() -- request thread started");
+            // add to running requests
+        }
+    }
+    void Update()
+    {
+        CreateGrid();
+        DoRequests();
+    }
+
+
+    // ===UWU===
+
     private void CreateGrid()
     {
+        position = transform.position;
+        size = transform.localScale;
         dimension = Vector2Int.FloorToInt(transform.localScale / nodesize);
         dimension.x -= (dimension.x % 2 == 0) ? 0 : 1;
         dimension.y -= (dimension.y % 2 == 0) ? 0 : 1;
@@ -24,8 +81,8 @@ public class Nav2DGrid : MonoBehaviour
         {
             for (int y = 0; y < dimension.y; y++)
             {
-                Vector3 worldPos = GridToWorldPosition(new Vector3(x, y));
-                Node node = new Node(new Vector2(x, y));
+                Vector3 worldPos = GridToWorldPosition(new Vector2Int(x, y));
+                Node node = new Node(new Vector2Int(x, y), new Vector2Int(x, y));
 
                 Collider2D hit = Physics2D.OverlapBox(worldPos, nodesize, 0, notWalkableMask);
 
@@ -43,142 +100,120 @@ public class Nav2DGrid : MonoBehaviour
         }
     }
 
-    public Vector3 GridToWorldPosition(Vector3 gridPosition)
+    public Vector3 GridToWorldPosition(Vector2Int gridPosition)
     {
         //Vector3 pos = 
         //    transform.position - transform.localScale / 2 + 
         //    new Vector3(gridPosition.x * nodesize.x, gridPosition.y * nodesize.y) + 
         //    (Vector3) nodesize / 2;
-        Vector3 pos = gridPosition - (Vector3) (Vector2) dimension / 2;
+        Vector3 pos = (Vector3) (Vector2) (gridPosition - dimension / 2);
         pos.x = pos.x * nodesize.x + nodesize.x / 2;
         pos.y = pos.y * nodesize.y + nodesize.y / 2;
-        pos += transform.position;
+        pos += position;
         return pos;
     }
 
-    public Vector2 WorldToGridPosition(Vector3 worldPosition)
+    public Vector2Int WorldToGridPosition(Vector3 worldPosition)
     {
-        Vector2 pos = worldPosition - transform.position;
+        Vector2 pos = worldPosition - position;
         pos.x = (pos.x) / nodesize.x;
         pos.y = (pos.y) / nodesize.y;
         pos += (Vector2)dimension / 2;
-        pos = (Vector2) Vector2Int.FloorToInt(pos);
-        return pos;
+        return Vector2Int.FloorToInt(pos);
     }
 
-    public List<Vector2> GetPath(Vector2 start, Vector2 end)
+    public void GetPath(Node[,] grid, PathRequest req)
     {
-        Node startnode = grid[(int) start.x, (int) start.y]; 
-        Node endnode = grid[(int)end.x, (int)end.y]; 
-        startnode.parent = null;
-        startnode.gcost = 0;
-        startnode.hcost = Node.Cost(startnode, endnode);
+        Debug.Log("GetPath() -- request thread started");
+        Vector2Int start = WorldToGridPosition(req.startPosition);
+        Vector2Int end = WorldToGridPosition(req.endPosition);
+        grid[start.x, start.y].parent = new Vector2Int(start.x, start.y);
+        grid[start.x, start.y].gcost = 0;
+        grid[start.x, start.y].hcost = Node.Cost(start, end);
 
-        List<Node> open = new List<Node>();
-        List<Node> closed = new List<Node>();
-        open.Add(startnode);
+        List<Vector2Int> open = new List<Vector2Int>();
+        List<Vector2Int> closed = new List<Vector2Int>();
+        open.Add(start);
+
+        List<Vector3> path = new List<Vector3>();
 
         while (true)
         {
-            Node cnode = open[0];
-            foreach (Node node in open) if (node.IsCostLessThan(cnode)) cnode = node;
+            Vector2Int cnode = open[0];
+            foreach (Vector2Int n in open) if (grid[n.x,n.y].IsCostLessThan(grid[cnode.x,cnode.y])) cnode = n;
             open.Remove(cnode);
             closed.Add(cnode);
 
-            if (cnode.gridPosition == endnode.gridPosition)
+            if (cnode == end)
             {
-                List<Vector2> path = new List<Vector2>();
+                lock (req)
+                {
+                    req.msg = "path is found";
+                }
+                // retrace the path
                 while (true)
                 {
-                    path.Insert(0, endnode.gridPosition);
-                    if (endnode.parent == null) break;
-                    else endnode = endnode.parent;
+                    path.Insert(0, GridToWorldPosition(grid[cnode.x,cnode.y].position));
+                    if (cnode == grid[cnode.x, cnode.y].parent) break;
+                    else cnode = grid[cnode.x, cnode.y].parent;
                 }
-                return path;
             }
 
-            foreach (Node neighbor in GetNodeNeighbors(cnode))
+            for (int i = -1; i < 2; i++)
             {
-                // if inclosed continue
-                if (closed.Contains(neighbor))
+                for (int j = -1; j < 2; j++)
                 {
-                    continue;
-                }
+                    if (i == 0 && j == 0) continue;
 
-                // if in open, compare else add
-                int offeredg = cnode.gcost + Node.Cost(cnode, neighbor);
-                if (open.Contains(neighbor))
-                {
-                    if (offeredg < neighbor.gcost)
+                    int x = i + cnode.x;
+                    int y = j + cnode.y;
+
+                    if (x < 0 || x >= grid.GetLength(0) || y < 0 || y >= grid.GetLength(1)) continue;
+                    if (!grid[x, y].walkable) continue;
+
+                    Vector2Int neighbor = new Vector2Int(x, y);
+
+                    if (closed.Contains(neighbor)) continue;
+
+                    int offeredg = grid[cnode.x,cnode.y].gcost + Node.Cost(cnode, neighbor);
+                    if (open.Contains(neighbor))
                     {
-                        neighbor.gcost = offeredg;
-                        neighbor.parent = cnode;
+                        if (offeredg < grid[neighbor.x,neighbor.y].gcost)
+                        {
+                            grid[neighbor.x, neighbor.y].gcost = offeredg;
+                            grid[neighbor.x, neighbor.y].parent = cnode;
+                        }
                     }
-                }
-                else
-                {
-                    neighbor.gcost = offeredg;
-                    neighbor.hcost = Node.Cost(neighbor, endnode);
-                    neighbor.parent = cnode;
-                    open.Add(neighbor);
+                    else
+                    {
+                        grid[neighbor.x, neighbor.y].gcost = offeredg;
+                        grid[neighbor.x, neighbor.y].hcost = Node.Cost(neighbor, end);
+                        grid[neighbor.x, neighbor.y].parent = cnode;
+                        open.Add(neighbor);
+                    }
                 }
             }
 
             if (open.Count == 0)
             {
-                List<Vector2> path = new List<Vector2>();
-                while (true)
+                path.Insert(0, GridToWorldPosition(start));
+                lock(req)
                 {
-                    path.Insert(0, cnode.gridPosition);
-                    if (cnode.parent == null) break;
-                    else cnode = cnode.parent;
+                    req.msg = "no path is found";
                 }
-                return path;
+                break;
             }
         }
-    }
 
-    public List<Vector3> RequestPath(Vector2 start, Vector2 end)
-    {
-        List<Vector2> path = GetPath(WorldToGridPosition(start), WorldToGridPosition(end));
-        List<Vector3> worldPath = new List<Vector3>();
-        for (int i=0; i<path.Count; i++)
+        lock(req)
         {
-            worldPath.Add(GridToWorldPosition(path[i]));
+            req.path = path;
+            req.isDone = true;
         }
-        return worldPath;
+
+        Debug.Log("GetPath() -- request thread ended");
     }
-
-    public List<Node> GetNodeNeighbors(Node n)
-    {
-        List<Node> neighbors = new List<Node>();
-        for (int i = -1; i < 2; i++)
-        {
-            for (int j = -1; j < 2; j++)
-            {
-                if (i == 0 && j == 0) continue;
-
-                int x = i + (int)n.gridPosition.x;
-                int y = j + (int)n.gridPosition.y;
-
-                if (x < 0 || x >= dimension.x || y < 0 || y >= dimension.y) continue;
-                if (!grid[x, y].walkable) continue;
-
-                neighbors.Add(grid[x, y]);
-            }
-        }
-        return neighbors;
-    }
-
-    private void Start()
-    {
-        CreateGrid();
-    }
-
-    private void Update()
-    {
-        CreateGrid();
-    }
+ 
 
     private void OnDrawGizmos()
     {
@@ -192,7 +227,7 @@ public class Nav2DGrid : MonoBehaviour
             {
                 for (int y = 0; y < dimension.y; y++)
                 {
-                    Vector3 worldPos = GridToWorldPosition(new Vector3(x, y));
+                    Vector3 worldPos = GridToWorldPosition(new Vector2Int(x, y));
                     if (grid != null)
                     {
                         if (grid[x, y].walkable)
