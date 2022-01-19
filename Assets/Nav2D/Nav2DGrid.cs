@@ -106,7 +106,7 @@ public class Nav2DGrid : MonoBehaviour
             for (int y = 0; y < dimension.y; y++)
             {
                 Vector3 worldPos = GridToWorldPosition(new Vector2Int(x, y));
-                Node node = new Node(new Vector2Int(x, y));
+                Node node = new Node(new Vector2Int(x, y), new Vector2Int(x, y));
 
                 Collider2D hit = Physics2D.OverlapBox(worldPos, nodesize, 0, notWalkableMask);
 
@@ -132,44 +132,33 @@ public class Nav2DGrid : MonoBehaviour
 
     public void GetPath(Node[,] grid, PathRequest req)
     {
-        // cloning grid
-        for (int i=0; i<grid.GetLength(0); i++)
-        {
-            for (int j=0; j<grid.GetLength(1); j++)
-            {
-                grid[i, j] = grid[i, j].GetClone();
-            }
-        }
+        Vector2Int start = WorldToGridPosition(req.startPosition);
+        Vector2Int end = WorldToGridPosition(req.endPosition);
+        grid[start.x, start.y].parent = start;
+        grid[start.x, start.y].gcost = 0;
+        grid[start.x, start.y].hcost = Node.Cost(start, start);
 
-        Vector2Int startVec = WorldToGridPosition(req.startPosition);
-        Vector2Int endVec = WorldToGridPosition(req.endPosition);
-        Node start = grid[startVec.x, startVec.y];
-        Node end = grid[endVec.x, endVec.y];
-        start.parent = start;
-        start.gcost = 0;
-        start.hcost = Node.Cost(start.position, start.position);
-
-        List<Node> open = new List<Node>();
-        List<Node> closed = new List<Node>();
+        List<Vector2Int> open = new List<Vector2Int>();
+        List<Vector2Int> closed = new List<Vector2Int>();
         open.Add(start);
 
         List<Vector3> path = new List<Vector3>();
 
         while (true)
         {
-            Node cnode = open[0];
-            foreach (Node n in open) if (n.IsCostLessThan(cnode)) cnode = n;
+            Vector2Int cnode = open[0];
+            foreach (Vector2Int n in open) if (grid[n.x, n.y].IsCostLessThan(grid[cnode.x,cnode.y])) cnode = n;
             open.Remove(cnode);
             closed.Add(cnode);
 
-            if (cnode.position == end.position)
+            if (cnode == end)
             {
                 // retrace the path
                 while (true)
                 {
-                    path.Insert(0,GridToWorldPosition(cnode.position));
-                    if (cnode.position == cnode.parent.position) break;
-                    else cnode = cnode.parent;
+                    path.Insert(0,GridToWorldPosition(cnode));
+                    if (cnode == grid[cnode.x, cnode.y].parent) break;
+                    else cnode = grid[cnode.x, cnode.y].parent;
                 }
             }
 
@@ -179,30 +168,30 @@ public class Nav2DGrid : MonoBehaviour
                 {
                     if (i == 0 && j == 0) continue;
 
-                    int x = i + cnode.position.x;
-                    int y = j + cnode.position.y;
+                    int x = i + cnode.x;
+                    int y = j + cnode.y;
 
                     if (x < 0 || x >= grid.GetLength(0) || y < 0 || y >= grid.GetLength(1)) continue;
                     if (!grid[x, y].walkable) continue;
 
-                    Node neighbor = grid[x, y];
+                    Vector2Int neighbor = new Vector2Int(x, y);
 
                     if (closed.Contains(neighbor)) continue;
 
-                    int offeredg = cnode.gcost + Node.Cost(cnode.position, neighbor.position);
+                    int offeredg = grid[cnode.x, cnode.y].gcost + Node.Cost(cnode, neighbor);
                     if (open.Contains(neighbor))
                     {
-                        if (offeredg < neighbor.gcost)
+                        if (offeredg < grid[neighbor.x, neighbor.y].gcost)
                         {
-                            neighbor.gcost = offeredg;
-                            neighbor.parent = cnode;
+                            grid[neighbor.x, neighbor.y].gcost = offeredg;
+                            grid[neighbor.x, neighbor.y].parent = cnode;
                         }
                     }
                     else
                     {
-                        neighbor.gcost = offeredg;
-                        neighbor.hcost = Node.Cost(neighbor.position, end.position);
-                        neighbor.parent = cnode;
+                        grid[neighbor.x, neighbor.y].gcost = offeredg;
+                        grid[neighbor.x, neighbor.y].hcost = Node.Cost(neighbor, end);
+                        grid[neighbor.x, neighbor.y].parent = cnode;
                         open.Add(neighbor);
                     }
                 }
@@ -210,7 +199,7 @@ public class Nav2DGrid : MonoBehaviour
 
             if (open.Count == 0)
             {
-                path.Insert(0,GridToWorldPosition(start.position));
+                path.Insert(0,GridToWorldPosition(start));
                 break;
             }
         }

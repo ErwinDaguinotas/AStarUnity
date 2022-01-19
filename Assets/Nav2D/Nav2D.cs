@@ -8,7 +8,7 @@ namespace Nav2D
     public class Node
     {
         public Vector2Int position;
-        public Node parent;
+        public Vector2Int parent;
         public bool walkable;
         public int weight;
         public int gcost;
@@ -16,7 +16,7 @@ namespace Nav2D
 
         public Node(
             Vector2Int _position,
-            Node _parent = null,
+            Vector2Int _parent,
             bool _walkable = false,
             int _weight = 0,
             int _gcost = 0,
@@ -28,11 +28,6 @@ namespace Nav2D
             weight = _weight;
             gcost = _gcost;
             hcost = _hcost;
-        }
-
-        public Node GetClone()
-        {
-            return new Node(position, parent, walkable, weight, gcost, hcost);
         }
 
         public int fcost { get { return gcost + hcost + weight; } }
