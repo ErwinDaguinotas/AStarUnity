@@ -7,43 +7,98 @@ using Nav2D;
 public class Nav2DAgent : MonoBehaviour
 {
     public GameObject gridObject;
-    public Nav2DGrid grid;
+    Nav2DGrid grid;
 
     public Transform target;
-    public Vector3 targetLastPosition;
     public float positionThreshold;
-    public Rigidbody2D rb;
     public float speed;
-
+    Vector3 targetLastPosition;
+    Rigidbody2D rb;
 
     public List<Vector3> path = null;
-    public PathRequest req;
+    PathRequest req;
 
+    public System.Diagnostics.Stopwatch timer = new System.Diagnostics.Stopwatch();
+
+    // ===UNITY FUNCTIONS===
     void Start()
     {
         grid = gridObject.GetComponent<Nav2DGrid>();
         rb = GetComponent<Rigidbody2D>();
 
         req = null;
+        StartCoroutine(FollowPath());
+        StartCoroutine(RequestPath());
     }
 
-    void FollowPath()
+    void Update()
     {
-        if (path != null && path.Count > 0)
+    }
+
+    private void FixedUpdate()
+    {
+    }
+
+    // ===PATH===
+    IEnumerator FollowPath()
+    {
+        while (true)
         {
-            Vector3 direction = (path[0] - transform.position).normalized;
-            rb.velocity = direction * speed;
-            if (grid.WorldToGridPosition(transform.position) == grid.WorldToGridPosition(path[0]))
+            lock (path)
             {
-                path.RemoveAt(0);
+                if (path != null && path.Count > 0)
+                {
+                    Vector3 direction = (path[0] - transform.position).normalized;
+                    rb.velocity = direction * speed;
+                    if (grid.WorldToGridPosition(transform.position) == grid.WorldToGridPosition(path[0]))
+                    {
+                            path.RemoveAt(0);
+                    }
+                }
+                else
+                {
+                    rb.velocity = Vector3.zero;
+                }
             }
-        }
-        else
-        {
-            rb.velocity = Vector3.zero;
+            yield return null;
         }
     }
 
+    IEnumerator RequestPath()
+    {
+        while (true)
+        {
+            // if path is complete
+            if (req != null && req.isDone == true)
+            {
+                timer.Stop();
+                Debug.Log("Path found! Time taken: " + timer.Elapsed);
+                timer.Reset();
+
+                // merge new path with existing path
+
+                lock(path)
+                {
+                    path = req.path;
+                }
+                lock(req)
+                {
+                    req = null;
+                }
+            }
+            // if should request for a new path
+            else if (req == null && (path == null || path.Count == 0|| (target.transform.position - targetLastPosition).magnitude > positionThreshold))
+            {
+                timer.Start();
+                req = new PathRequest(this, transform.position, target.transform.position);
+                grid.RequestPath(req);
+                targetLastPosition = target.transform.position;
+            }
+            yield return null;
+        }
+    }
+
+    // ===FUNCTIONS===
     void DrawPath()
     {
         if (path != null && path.Count > 0)
@@ -57,37 +112,7 @@ public class Nav2DAgent : MonoBehaviour
         }
     }
 
-    void RequestPath()
-    {
-        // check if should request for a path
-        if (req != null && req.isDone == true)
-        {
-            // copy the resulting path to this.path
-            path = req.path;
-            //Debug.Log("RequestPath() -- request done");
-            //Debug.Log("RequestPath() -- MSG: " + req.msg);
-            req = null;
-        }
-        else if (Input.GetKeyDown(KeyCode.Space))
-        //else if ((path.Count <= 0  || (target.transform.position-targetLastPosition).magnitude > positionThreshold) && req == null)
-        {
-            // request for a path
-            //Debug.Log("RequestPath() -- path requested");
-            req = new PathRequest(this, transform.position, target.transform.position);
-            grid.RequestPath(req);
-        }
-    }
-
-    void Update()
-    {
-    }
-
-    private void FixedUpdate()
-    {
-        RequestPath();
-        FollowPath();
-    }
-
+    // ===GIZMOS===
     private void OnDrawGizmos()
     {
         DrawPath();

@@ -5,10 +5,10 @@ using UnityEngine.Tilemaps;
 
 namespace Nav2D
 {
-    public struct Node
+    public class Node
     {
         public Vector2Int position;
-        public Vector2Int parent;
+        public Node parent;
         public bool walkable;
         public int weight;
         public int gcost;
@@ -16,7 +16,7 @@ namespace Nav2D
 
         public Node(
             Vector2Int _position,
-            Vector2Int _parent,
+            Node _parent = null,
             bool _walkable = false,
             int _weight = 0,
             int _gcost = 0,
@@ -30,10 +30,12 @@ namespace Nav2D
             hcost = _hcost;
         }
 
-        public int fcost
+        public Node GetClone()
         {
-            get { return gcost + hcost; }
+            return new Node(position, parent, walkable, weight, gcost, hcost);
         }
+
+        public int fcost { get { return gcost + hcost + weight; } }
 
         public static int Cost(Vector2Int a, Vector2Int b)
         {
@@ -42,6 +44,7 @@ namespace Nav2D
             int c = Mathf.Max(x, y) * 10 + Mathf.Min(x, y) * (14 - 10);
             return c;
         }
+
         public bool IsCostLessThan(Node a)
         {
             if (fcost == a.fcost)
@@ -74,5 +77,9 @@ namespace Nav2D
             path = _path;
             msg = "none";
         }
+    }
+
+    public struct Heap
+    {
     }
 }

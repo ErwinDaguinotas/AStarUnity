@@ -53,3 +53,21 @@ pathRequest:
 
         
         Vector3 pos = gridPosition - (Vector3) (Vector2) dimension / 2;
+
+
+
+
+grid:
+	optimize a*
+		heap
+		reduce array accesses
+
+	implement weights
+
+agent
+	smoothen follow path
+
+	better way of changing path
+		merge new path with the existing path
+
+		better way of reconizing when to request path
