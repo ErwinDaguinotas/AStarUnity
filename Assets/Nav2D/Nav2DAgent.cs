@@ -64,14 +64,15 @@ public class Nav2DAgent : MonoBehaviour
         {
             // copy the resulting path to this.path
             path = req.path;
-            Debug.Log("RequestPath() -- request done");
-            Debug.Log("RequestPath() -- MSG: " + req.msg);
+            //Debug.Log("RequestPath() -- request done");
+            //Debug.Log("RequestPath() -- MSG: " + req.msg);
             req = null;
         }
-        else if (Input.GetKeyDown(KeyCode.Space))// (path.Count <= 0  || (target.transform.position-targetLastPosition).magnitude > positionThreshold) && req == null)
+        else if (Input.GetKeyDown(KeyCode.Space))
+        //else if ((path.Count <= 0  || (target.transform.position-targetLastPosition).magnitude > positionThreshold) && req == null)
         {
             // request for a path
-            Debug.Log("RequestPath() -- path requested");
+            //Debug.Log("RequestPath() -- path requested");
             req = new PathRequest(this, transform.position, target.transform.position);
             grid.RequestPath(req);
         }

@@ -23,46 +23,81 @@ public class Nav2DGrid : MonoBehaviour
 
     [Header("PATH REQUEST SYSTEM")]
     public Queue<PathRequest> requests;
-    public Queue<Thread> runningRequests;
+    public List<Thread> runningRequests;
+    public int maxRunningRequests = 5;
     public Nav2DGrid instance;
 
     private void Start()
     {
         requests = new Queue<PathRequest>();
-        runningRequests = new Queue<Thread>();
+        runningRequests = new List<Thread>();
         instance = this;
 
         CreateGrid();
+        new Thread(DoRequests).Start();
     }
 
     
     // ===PATH REQEUSTS MANAGER===
     public void RequestPath(PathRequest req)
     {
-        Debug.Log("RequestPath() -- request recieved");
+        //Debug.Log("RequestPath() -- request recieved");
         requests.Enqueue(req);
-        Debug.Log("RequestPath() -- request queued");
+        //Debug.Log("RequestPath() -- request queued");
     }
 
     public void DoRequests()
     {
-        while (requests.Count > 0)
+        while(true)
         {
-            Debug.Log("DoRequests() -- request threaded");
-            PathRequest req = requests.Dequeue();
-            Thread t = new Thread(() =>
+            // removing finished threads
+            List<Thread> temp = new List<Thread>();
+            foreach (Thread running in runningRequests)
             {
-                GetPath((Node[,])grid.Clone(), req);
-            });
-            t.Start();
-            Debug.Log("DoRequests() -- request thread started");
-            // add to running requests
+                if (running.IsAlive)
+                {
+                    temp.Add(running);
+                }
+            }
+            runningRequests = temp;
+
+            if (requests.Count > 0)
+            {
+                // check if can add a thread
+                if (runningRequests.Count >= maxRunningRequests) continue;
+
+                System.Diagnostics.Stopwatch timer = new System.Diagnostics.Stopwatch();
+                timer.Start();
+                float totalTime = 0;
+                int i = 0;
+                while (requests.Count > 0 && i < 1)
+                {
+                    //Debug.Log("DoRequests() -- request threaded");
+                    PathRequest req = requests.Dequeue();
+                    Thread t = new Thread(() =>
+                    {
+                        GetPath((Node[,])grid.Clone(), req);
+                    });
+                    System.Diagnostics.Stopwatch timer2 = new System.Diagnostics.Stopwatch();
+                    timer2.Start();
+                    t.Start();
+                    timer2.Stop();
+                    runningRequests.Add(t);
+                    //Debug.Log("DoRequests() -- request thread started " + timer2.Elapsed);
+                    totalTime += timer2.Elapsed.Milliseconds;
+                    // add to running requests
+                    i++;
+                }
+                timer.Stop();
+                Debug.Log("DoRequests() -- finished threading ================= ElapsedTime: " + timer.Elapsed + " Start: " + totalTime / 1000.0f);
+            }
         }
     }
     void Update()
     {
         CreateGrid();
-        DoRequests();
+        //DoRequests();
+        //Debug.Log(".");
     }
 
 

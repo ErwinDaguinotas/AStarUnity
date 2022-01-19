@@ -41,3 +41,15 @@ pathRequest:
 	isDone // flag to notify the owner when the request is done
 	vector worldStart
 	vector worldEnd
+
+
+
+
+
+
+
+
+        Vector3 pos = (Vector3) (Vector2) (gridPosition - dimension / 2);
+
+        
+        Vector3 pos = gridPosition - (Vector3) (Vector2) dimension / 2;
